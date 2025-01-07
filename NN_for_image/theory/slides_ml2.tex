@@ -1,0 +1,360 @@
+\documentclass[handout]{beamer}
+
+\usefonttheme[onlymath]{serif}
+
+\setbeamertemplate{navigation symbols}{}
+\usetheme{Berlin}
+\setbeamertemplate{headline}{}
+\defbeamertemplate*{footline}{Berlin} {
+	\hbox{
+		\begin{beamercolorbox}[wd=.1\paperwidth,leftskip=.3cm]{numbering}
+			\insertframenumber{}$/$\inserttotalframenumber
+		\end{beamercolorbox}
+		\begin{beamercolorbox}[wd=.5\paperwidth,ht=2.5ex,dp=1.125ex]{author in head/foot}
+			\hfill\insertshortauthor~~\insertshortinstitute
+		\end{beamercolorbox}
+		\begin{beamercolorbox}[wd=.4\paperwidth,leftskip=.3cm]{title in foot}
+			\insertshorttitle
+		\end{beamercolorbox}
+	}
+}
+
+\usepackage[utf8x]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage{tikz}
+\usepackage{ragged2e}
+\usepackage{dsfont}
+\usepackage[font=small,skip=0pt]{caption}
+
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{bm}
+\usepackage{bbold}
+\usepackage{subfigure}
+\usepackage{multicol}
+\usepackage{multirow}
+
+\newtheorem{remark}{Замечание}
+
+\title[Статистическое и машинное обучение]{Глубокое обучение. Работа с изображениями. Сверточные сети. Механизм внимания в сверточных сетях. Сегментация. GAN}
+\institute[ ]{%
+	\small
+	Санкт-Петербургский государственный университет\\
+	Кафедра статистического моделирования
+}
+\date{}
+
+\begin{document}
+	
+	\begin{frame}
+		\titlepage
+	\end{frame}
+
+\begin{frame}{Глубокое обучение: Введение}
+
+В чем разница между классическим машинным обучением и глубоким обучением?
+
+\vspace*{5pt}
+Модели глубокого обучения --- \textbf{нейронные сети}. 
+
+\par\noindent\rule{\textwidth}{0.5pt}
+\textcolor{red}{Th Хорника}: для любой непрерывной функции найдется нейронная сеть с линейным выходом, аппроксимирующая функцию с заданной точностью.
+\par\noindent\rule{\textwidth}{0.5pt}
+
+\vspace*{5pt}
+\textbf{Слой} нейронной сети --- преобразование $\sigma(\mathbf{XW}+b)$, где
+
+\begin{enumerate}
+	\item $\mathbf{X}$ --- входные данные слоя, строки --- индивиды, столбцы --- признаки.
+	\item $\mathbf{W}, b$ --- веса слоя (обучаемые параметры).
+	\item $\mathbf{\sigma}$ --- нелинейная функция. Требования: непрерывная, монотонная, желательно дифференцируемая.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}{Глубокое обучение: Введение}
+\textbf{Classic ML:}
+\begin{itemize}
+	\item Модели имеют не более одного нелинейного слоя, не требуют много вычислительных ресурсов.
+	\item Feature extraction: звлечение признаков из неструктурированных данных требует сложной аналитической работы.
+	\item Feature engineering: сложная аналитическая работа.
+\end{itemize}
+
+\textbf{Deep Learning:}
+\begin{enumerate}
+	\item Модели имеют более одного нелинейного слоя. Требуют значительные вычислительные ресурсы.
+	\item Feature extraction: не требует много трудозатрат.
+	\item Feature engineering: происходит автоматически ввиду нелинейных преобразований.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}{Глубокое обучение: Архитектуры}
+	Гибкость архитектуры нейронной сети: любое число выходов.
+
+	\begin{figure}
+	    \includegraphics[scale = 0.14]{fig/nn1.png}
+	    \caption{\small Архитектура нейронной сети
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+	\vspace*{-12pt}
+	Это означает, что можно решать задачу как многомерной регрессии, так и многоклассовую классификацию:
+
+	\begin{equation*}
+		\mathsf{softmax}(\mathbf{X}W_j+b_j)=\frac{\mathsf{exp}(\mathbf{X}W_j+b_j)}{\sum_{i=1}^K\mathsf{exp}(\mathbf{X}W_i+b_i)}
+	\end{equation*}
+\end{frame}
+
+\begin{frame}{Нейронные сети: обучение}
+	Нейронная сеть обучается с помощью \textbf{прямого} прохода и \textbf{обратного} распространения ошибки (forward/backward propagation). Используется градиентный спуск.
+	\begin{figure}
+	    \includegraphics[scale = 0.4]{fig/backprop.png}
+	    \caption{\small Forward and backward propagation
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Глубокое обучение: Проблемы}
+	\textcolor{red}{Затухающий градиент} (vanishing gradient):
+	\begin{itemize}
+		\item При больших по модулю значениях аргумента функций активации $\mathsf{tanh}, \mathsf{sigmoid}$ производная функции активации стремится к нулю. 
+		\item Таким образом градиент не распространяется.
+	\end{itemize}
+	
+	\textcolor{blue}{Решение}: Использование других функций активации; использование residual blocks.
+
+	\par\noindent\rule{\textwidth}{0.5pt}
+
+	\textcolor{red}{Взрывающийся градиент} (exploding gradient):
+	\begin{itemize}
+		\item Накопление больших по модулю градиентов. 
+		\item Наблюдается, например, при использовании $\mathsf{sigmoid}$ в скрытых слоях: градиент растет экспоненциально.
+	\end{itemize}
+
+	\textcolor{blue}{Решение}: Регуляризация и \textbf{Gradient clipping}:
+	\begin{equation*}
+		\nabla_{c} = \begin{cases}
+		\nabla, ||\nabla|| < T,\\
+		\frac{T}{||\nabla||}\nabla, otherwise
+	\end{cases}
+	\end{equation*}
+
+\end{frame}
+
+\begin{frame}{Глубокое обучение: Регуляризация и прореживание}
+	\textbf{Регуляризация}:
+	\begin{enumerate}
+		\item L1, L2 штрафы к функции потерь
+		\item \textbf{Dropout} (2014) --- как добиться того, чтобы модель использовала все свои параметры? Случайное зануление доли весов.
+		\item \textbf{BatchNorm} (2015) --- автоматическая стандартизация входа слоя.
+	\end{enumerate}
+	\textbf{Прореживание} (pruning) --- сжатие предобученной сети за счет устранения части параметров.
+	\begin{itemize}
+		\item Самые популярные техники прореживания (\textbf{OBS, OBD}) основаны на разложении функции потерь в ряд Тейлора: устраняем веса с самым низким ростом функции потерь.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Работа с изображениями}
+	\begin{figure}
+	    \includegraphics[scale = 0.6]{fig/image.png}
+	    \caption{\small Представление изображения в памяти
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Распознавание цифр (MNIST)}
+	\begin{figure}
+	    \includegraphics[scale = 0.33]{fig/mnist.png}
+	    \caption{\small Первые архитектуры ANN для распознавания цифр
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+	\vspace*{-10pt}
+	\textcolor{red}{Недостаточная точность, большое количество параметров}
+\end{frame}
+
+\begin{frame}{Первые архитектуры сверточных сетей}
+	Самая первая широко известная архитектура --- LeNet 5 (1995). Input: 32x32 gray-scale, свертки 5x5, 60K параметров.
+	\begin{figure}
+	    \includegraphics[scale = 0.33]{fig/conv.png}
+	    \caption{\small Convolutional layer
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Первые архитектуры сверточных сетей}
+	\begin{figure}
+	    \includegraphics[scale = 0.33]{fig/maxp.png}
+	    \caption{\small Max-Pooling layer
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Первые архитектуры сверточных сетей}
+	\begin{figure}
+	    \includegraphics[scale = 0.3]{fig/conv2.png}
+	    \caption{\small Первые архитектуры сверточных сетей
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Первые архитектуры сверточных сетей}
+	\begin{enumerate}
+		\item LeNet 5 (1995). Input: 32x32 gray-scale, свертки 5x5, 60K параметров.
+		\item AlexNet (2012) Input: 227x227x3, свертки 11x11, 5x5, 3x3, 60M параметров. Победа в ImageNet и технологический прорыв.
+		\item VGG-16 (2015) Input: 224x224x3, использование двойных сверток, 138M параметров.
+		\item ResNet (2015): использование residual blocks --- технологический прорыв.
+	\end{enumerate}
+	
+\end{frame}
+
+\begin{frame}{ResNet (2015)}
+	\begin{figure}
+	    \includegraphics[scale = 0.2]{fig/resnet.png}
+	    \caption{\small Residual Block
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+	\begin{itemize}
+		\item Добавление residual blocks не сильно вредит сети.
+		\item Справляется с проблемой затухающего градиента.
+		\item В каждой современной сверточной сети есть residual blocks.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Inception (2014)}
+	\begin{figure}
+	    \includegraphics[scale = 0.36]{fig/inception.png}
+	    \caption{\small Inception v1 blocks
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+	\begin{itemize}
+		\item Идея нескольких выходов и составная Loss function позволили справиться с проблемой затухающего градиента.
+		\item Bottleneck layer: свертки 1x1 позволяют уменьшать количество каналов.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Inception (2014)}
+	\begin{figure}
+	    \includegraphics[scale = 0.33]{fig/inception2.png}
+	    \caption{\small Inception v1
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Преимущества сверточных сетей}
+	\begin{itemize}
+		\item В сверточных блоках параметров в разы меньше, чем в полносвязных.
+		\item Сверточные блоки позволяют извлекать сложные признаки.
+		\item Transfer learning: сверточная сеть, обученная на широком домене, может быть дообучена для более узкого домена.
+		\item Можно визуализировать карты признаков из сверточных блоков (Layer Heatmap)
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Layer Heatmap}
+	\begin{figure}
+	    \includegraphics[scale = 0.2]{fig/heatmap.png}
+	    \caption{\small Classifier Conv layer Heatmap
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Механизм внимания в сверточных сетях}
+	\begin{figure}
+	    \includegraphics[scale = 0.47]{fig/attention.png}
+	    \caption{\small Attention in Conv Networks
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+	\vspace*{-10pt}
+	\begin{itemize}
+		\item Базовая идея: не все части входной карты признаков важны, можно сфокусироваться на некоторых регионах.
+		\item Реализация: считаем attention weights (некоторый слой + softmax) $\Rightarrow$ домножаем карту признаков на attention weights.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Сегментация: базовая идея}
+	\begin{itemize}
+		\item Задача сегментации: необходимо создать маску, которая будет разделять изображение на несколько классов.
+	\end{itemize}
+	\begin{figure}
+	    \includegraphics[scale = 0.23]{fig/segmentation.png}
+	    \caption{\small Segmentation Architecture
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Сегментация: Unet (2015)}
+	\begin{figure}
+	    \includegraphics[scale = 0.14]{fig/unet.png}
+	    \caption{\small Unet (2015) Architecture
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+	\begin{itemize}
+		\item UpConv слой: возвращение размерности выходной карты признаков к размерности входной.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{GAN: Введение}
+	\begin{itemize}
+		\item \textbf{Генеративные сети} --- нейронные сети, которые генерируют реалистичные образцы данных, подобные тем, на которых они обучались.
+	\end{itemize}
+	Составляющие GAN:
+
+	\begin{enumerate}
+		\item \textbf{Генератор} --- модель, которая учится из нормального распределения получать изображение.
+		\item \textbf{Дискриминатор} --- модель, которая классифицирует выход генератора как настоящее изображение или ненастоящее.
+		\item Генератор и Дискриминатор обучаются попеременно.
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}{GAN: Введение}
+	\begin{figure}
+	    \includegraphics[scale = 0.43]{fig/gan1.png}
+	    \caption{\small GAN Architecture
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{GAN: История создания}
+	\begin{itemize}
+		\item DCGAN (2015): вектор из нормального распределения размера 100  и Deep CNN.
+	\end{itemize}
+	\begin{figure}
+	    \includegraphics[scale = 0.43]{fig/dcgan.png}
+	    \caption{\small DCGAN images
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{GAN: История создания}
+	\begin{itemize}
+		\item Stable Diffusion: text-to-image модель
+	\end{itemize}
+	\begin{figure}
+	    \includegraphics[scale = 0.14]{fig/sd.png}
+	    \caption{\small Stable diffusion architecture
+	    } 
+	    \label{fig:w_series}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{GAN: артефакты}
+
+\end{frame}
+
+\end{document}
